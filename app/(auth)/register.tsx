@@ -10,7 +10,6 @@ export default function RegisterScreen() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
 
   return (
     <View style={styles.container}>
@@ -33,14 +32,6 @@ export default function RegisterScreen() {
         style={styles.input}
       />
 
-      <TextInput
-        value={confirmPassword}
-        onChangeText={setConfirmPassword}
-        placeholder="Confirm Password"
-        secureTextEntry
-        style={styles.input}
-      />
-
       <Button
         title="Create Account"
         onPress={() => {
@@ -50,9 +41,8 @@ export default function RegisterScreen() {
       />
 
       <View style={styles.footerRow}>
-        <Text style={styles.footerText}>Already have an account?</Text>
         <Link href="/(auth)/login" style={styles.link}>
-          Log In
+          Log in to an existing account
         </Link>
       </View>
     </View>

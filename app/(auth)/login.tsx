@@ -33,7 +33,7 @@ export default function LoginScreen() {
       />
 
       <Button
-        title="Log In"
+        title="Sign In"
         onPress={() => {
           signIn();
           router.replace('/(tabs)/home');
@@ -41,9 +41,8 @@ export default function LoginScreen() {
       />
 
       <View style={styles.footerRow}>
-        <Text style={styles.footerText}>No account?</Text>
         <Link href="/(auth)/register" style={styles.link}>
-          Register
+          Create a new account
         </Link>
       </View>
     </View>
