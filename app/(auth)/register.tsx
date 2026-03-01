@@ -1,6 +1,6 @@
 import { Link, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Button, SafeAreaView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Button, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { useAuth } from '@/contexts/auth';
 
@@ -13,51 +13,49 @@ export default function RegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
-        <Text style={styles.title}>Create Account</Text>
+    <View style={styles.container}>
+      <Text style={styles.title}>Create Account</Text>
 
-        <TextInput
-          value={email}
-          onChangeText={setEmail}
-          placeholder="Email"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          style={styles.input}
-        />
+      <TextInput
+        value={email}
+        onChangeText={setEmail}
+        placeholder="Email"
+        autoCapitalize="none"
+        keyboardType="email-address"
+        style={styles.input}
+      />
 
-        <TextInput
-          value={password}
-          onChangeText={setPassword}
-          placeholder="Password"
-          secureTextEntry
-          style={styles.input}
-        />
+      <TextInput
+        value={password}
+        onChangeText={setPassword}
+        placeholder="Password"
+        secureTextEntry
+        style={styles.input}
+      />
 
-        <TextInput
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-          placeholder="Confirm Password"
-          secureTextEntry
-          style={styles.input}
-        />
+      <TextInput
+        value={confirmPassword}
+        onChangeText={setConfirmPassword}
+        placeholder="Confirm Password"
+        secureTextEntry
+        style={styles.input}
+      />
 
-        <Button
-          title="Create Account"
-          onPress={() => {
-            signIn();
-            router.replace('/(tabs)/home');
-          }}
-        />
+      <Button
+        title="Create Account"
+        onPress={() => {
+          signIn();
+          router.replace('/(tabs)/home');
+        }}
+      />
 
-        <View style={styles.footerRow}>
-          <Text style={styles.footerText}>Already have an account?</Text>
-          <Link href="/(auth)/login" style={styles.link}>
-            Log In
-          </Link>
-        </View>
+      <View style={styles.footerRow}>
+        <Text style={styles.footerText}>Already have an account?</Text>
+        <Link href="/(auth)/login" style={styles.link}>
+          Log In
+        </Link>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 

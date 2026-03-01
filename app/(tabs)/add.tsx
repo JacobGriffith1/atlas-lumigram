@@ -1,14 +1,12 @@
 import React from 'react';
-import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 export default function AddPostScreen() {
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
-        <Text style={styles.title}>Add Post</Text>
-        <Text style={styles.subtitle}>Placeholder screen (content comes in later tasks)</Text>
-      </View>
-    </SafeAreaView>
+    <View style={styles.container}>
+      <Text style={styles.title}>Add Post</Text>
+      <Text style={styles.subtitle}>Placeholder screen (content comes in later tasks)</Text>
+    </View>
   );
 }
 

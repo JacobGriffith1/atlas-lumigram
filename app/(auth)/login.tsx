@@ -1,6 +1,6 @@
 import { Link, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Button, SafeAreaView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Button, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { useAuth } from '@/contexts/auth';
 
@@ -12,43 +12,41 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
-        <Text style={styles.title}>Lumigram</Text>
+    <View style={styles.container}>
+      <Text style={styles.title}>Lumigram</Text>
 
-        <TextInput
-          value={email}
-          onChangeText={setEmail}
-          placeholder="Email"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          style={styles.input}
-        />
+      <TextInput
+        value={email}
+        onChangeText={setEmail}
+        placeholder="Email"
+        autoCapitalize="none"
+        keyboardType="email-address"
+        style={styles.input}
+      />
 
-        <TextInput
-          value={password}
-          onChangeText={setPassword}
-          placeholder="Password"
-          secureTextEntry
-          style={styles.input}
-        />
+      <TextInput
+        value={password}
+        onChangeText={setPassword}
+        placeholder="Password"
+        secureTextEntry
+        style={styles.input}
+      />
 
-        <Button
-          title="Log In"
-          onPress={() => {
-            signIn();
-            router.replace('/(tabs)/home');
-          }}
-        />
+      <Button
+        title="Log In"
+        onPress={() => {
+          signIn();
+          router.replace('/(tabs)/home');
+        }}
+      />
 
-        <View style={styles.footerRow}>
-          <Text style={styles.footerText}>No account?</Text>
-          <Link href="/(auth)/register" style={styles.link}>
-            Register
-          </Link>
-        </View>
+      <View style={styles.footerRow}>
+        <Text style={styles.footerText}>No account?</Text>
+        <Link href="/(auth)/register" style={styles.link}>
+          Register
+        </Link>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
