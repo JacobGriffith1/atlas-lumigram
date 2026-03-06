@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Image, StyleSheet, Text, View } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import {
   collection,
   getDocs,
@@ -9,6 +9,7 @@ import {
   orderBy,
   query,
   startAfter,
+  type DocumentData,
   type QueryDocumentSnapshot,
   type Timestamp,
 } from 'firebase/firestore';
@@ -16,8 +17,9 @@ import {
 import { useAuth } from '@/contexts/auth';
 import { db } from '@/lib/firebase';
 
-type FavoriteDoc = {
-  id: string;
+type Favorite = {
+  id: string; // doc id = postId
+  postId: string;
   imageUrl: string;
   caption: string;
   createdAt: Timestamp | null;
@@ -27,7 +29,7 @@ type FavoriteDoc = {
 
 const PAGE_SIZE = 8;
 
-function FavoriteItem({ item }: { item: FavoriteDoc }) {
+function FavoriteItem({ item }: { item: Favorite }) {
   const [showCaption, setShowCaption] = useState(false);
 
   const longPress = useMemo(
@@ -45,7 +47,6 @@ function FavoriteItem({ item }: { item: FavoriteDoc }) {
       <GestureDetector gesture={longPress}>
         <View>
           <Image source={{ uri: item.imageUrl }} style={styles.image} />
-
           {showCaption ? (
             <View style={styles.captionOverlay}>
               <Text style={styles.captionText}>
@@ -59,95 +60,105 @@ function FavoriteItem({ item }: { item: FavoriteDoc }) {
   );
 }
 
+function toFavorite(docSnap: QueryDocumentSnapshot<DocumentData>): Favorite {
+  const data = docSnap.data() as Record<string, unknown>;
+  return {
+    id: docSnap.id,
+    postId: String(data.postId ?? docSnap.id),
+    imageUrl: String(data.imageUrl ?? ''),
+    caption: String(data.caption ?? ''),
+    createdAt: (data.createdAt as Timestamp) ?? null,
+    createdBy: String(data.createdBy ?? ''),
+    favoritedAt: (data.favoritedAt as Timestamp) ?? null,
+  };
+}
+
 export default function FavoritesScreen() {
   const { user } = useAuth();
+  const userId = user?.uid ?? null;
 
-  const [items, setItems] = useState<FavoriteDoc[]>([]);
+  const [items, setItems] = useState<Favorite[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingFirstPage, setLoadingFirstPage] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const [cursor, setCursor] = useState<QueryDocumentSnapshot | null>(null);
+  const [cursor, setCursor] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
 
-  const fetchPage = useCallback(
-    async (opts: { reset: boolean }) => {
-      if (!user) return;
+  const fetchFirstPage = useCallback(async () => {
+    if (!userId) return;
 
-      const base = collection(db, 'users', user.uid, 'favorites');
+    const base = collection(db, 'users', userId, 'favorites');
+    const q = query(base, orderBy('favoritedAt', 'desc'), limit(PAGE_SIZE));
+    const snap = await getDocs(q);
 
-      const q =
-        opts.reset || !cursor
-          ? query(base, orderBy('favoritedAt', 'desc'), limit(PAGE_SIZE))
-          : query(base, orderBy('favoritedAt', 'desc'), startAfter(cursor), limit(PAGE_SIZE));
+    setItems(snap.docs.map(toFavorite));
+    setCursor(snap.docs.length ? snap.docs[snap.docs.length - 1] : null);
+    setHasMore(snap.docs.length === PAGE_SIZE);
+  }, [userId]);
 
-      const snap = await getDocs(q);
+  const fetchNextPage = useCallback(async () => {
+    if (!userId || !cursor || !hasMore) return;
 
-      const nextItems: FavoriteDoc[] = snap.docs.map((d) => {
-        const data = d.data() as any;
-        return {
-          id: d.id,
-          imageUrl: String(data.imageUrl ?? ''),
-          caption: String(data.caption ?? ''),
-          createdAt: (data.createdAt as Timestamp) ?? null,
-          createdBy: String(data.createdBy ?? ''),
-          favoritedAt: (data.favoritedAt as Timestamp) ?? null,
-        };
-      });
+    const base = collection(db, 'users', userId, 'favorites');
+    const q = query(base, orderBy('favoritedAt', 'desc'), startAfter(cursor), limit(PAGE_SIZE));
+    const snap = await getDocs(q);
 
-      const nextCursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
-      const nextHasMore = snap.docs.length === PAGE_SIZE;
-
-      if (opts.reset) setItems(nextItems);
-      else setItems((prev) => [...prev, ...nextItems]);
-
-      setCursor(nextCursor);
-      setHasMore(nextHasMore);
-    },
-    [cursor, user]
-  );
-
-  const loadFirstPage = useCallback(async () => {
-    setLoadingFirstPage(true);
-    try {
-      setCursor(null);
-      setHasMore(true);
-      await fetchPage({ reset: true });
-    } finally {
-      setLoadingFirstPage(false);
-    }
-  }, [fetchPage]);
+    setItems((prev) => [...prev, ...snap.docs.map(toFavorite)]);
+    setCursor(snap.docs.length ? snap.docs[snap.docs.length - 1] : cursor);
+    setHasMore(snap.docs.length === PAGE_SIZE);
+  }, [cursor, hasMore, userId]);
 
   const onRefresh = useCallback(async () => {
+    if (!userId) return;
+
     setRefreshing(true);
     try {
       setCursor(null);
       setHasMore(true);
-      await fetchPage({ reset: true });
+      await fetchFirstPage();
     } finally {
       setRefreshing(false);
     }
-  }, [fetchPage]);
+  }, [fetchFirstPage, userId]);
 
-  const loadMore = useCallback(async () => {
+  const onEndReached = useCallback(async () => {
     if (loadingFirstPage || refreshing || loadingMore) return;
     if (!hasMore || !cursor) return;
 
     setLoadingMore(true);
     try {
-      await fetchPage({ reset: false });
+      await fetchNextPage();
     } finally {
       setLoadingMore(false);
     }
-  }, [cursor, fetchPage, hasMore, loadingFirstPage, loadingMore, refreshing]);
+  }, [cursor, fetchNextPage, hasMore, loadingFirstPage, loadingMore, refreshing]);
 
   useEffect(() => {
-    if (!user) {
+    if (!userId) {
       setItems([]);
-      Alert.alert('Not logged in', 'Please log in again.');
+      setCursor(null);
+      setHasMore(true);
+      setLoadingFirstPage(false);
       return;
     }
-    void loadFirstPage();
-  }, [loadFirstPage, user]);
+
+    setLoadingFirstPage(true);
+    void (async () => {
+      try {
+        await fetchFirstPage();
+      } finally {
+        setLoadingFirstPage(false);
+      }
+    })();
+  }, [fetchFirstPage, userId]);
+
+  if (!userId) {
+    return (
+      <View style={[styles.screen, styles.center]}>
+        <Text style={styles.emptyText}>Please log in.</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.screen}>
@@ -157,7 +168,7 @@ export default function FavoritesScreen() {
         renderItem={({ item }) => <FavoriteItem item={item} />}
         refreshing={refreshing}
         onRefresh={onRefresh}
-        onEndReached={loadMore}
+        onEndReached={onEndReached}
         onEndReachedThreshold={0.4}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
@@ -175,6 +186,7 @@ export default function FavoritesScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  center: { justifyContent: 'center' },
   listContent: { paddingVertical: 12 },
 
   card: { paddingHorizontal: 12, paddingVertical: 10 },

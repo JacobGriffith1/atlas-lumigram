@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Image, StyleSheet, Text, View } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { FlashList } from '@shopify/flash-list';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import {
   collection,
   doc,
@@ -32,8 +32,6 @@ const PAGE_SIZE = 8;
 
 async function addFavorite(params: { userId: string; post: Post }): Promise<void> {
   const { userId, post } = params;
-
-  // users/{uid}/favorites/{postId}
   const favoriteRef = doc(db, 'users', userId, 'favorites', post.id);
 
   await setDoc(
@@ -76,7 +74,6 @@ function FeedItem({ item, userId }: { item: Post; userId: string | null }) {
             return;
           }
 
-          // Fire-and-forget write to Firestore favorites
           void addFavorite({ userId, post: item });
         })
         .runOnJS(true),
@@ -112,46 +109,50 @@ export default function HomeScreen() {
   const [loadingFirstPage, setLoadingFirstPage] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const [cursor, setCursor] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
 
-  const fetchPage = useCallback(
-    async (opts: { reset: boolean }) => {
-      const base = collection(db, 'posts');
+  // FlashList can call onEndReached during initial layout; we “remember” it.
+  const endReachedWhileLoadingRef = useRef(false);
 
-      const q =
-        opts.reset || !cursor
-          ? query(base, orderBy('createdAt', 'desc'), limit(PAGE_SIZE))
-          : query(base, orderBy('createdAt', 'desc'), startAfter(cursor), limit(PAGE_SIZE));
+  // Cursor refs avoid timing issues between state updates and callbacks.
+  const cursorRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
 
-      const snap = await getDocs(q);
+  const fetchPage = useCallback(async (opts: { reset: boolean }) => {
+    const base = collection(db, 'posts');
 
-      const nextItems: Post[] = snap.docs.map((d) => {
-        const data = d.data() as Record<string, unknown>;
-        return {
-          id: d.id,
-          imageUrl: String(data.imageUrl ?? ''),
-          caption: String(data.caption ?? ''),
-          createdAt: (data.createdAt as Timestamp) ?? null,
-          createdBy: String(data.createdBy ?? ''),
-        };
-      });
+    // Stable ordering: createdAt desc + document id desc (tie-breaker)
+    const order = [orderBy('createdAt', 'desc'), orderBy('__name__', 'desc')] as const;
 
-      const nextCursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
-      const nextHasMore = snap.docs.length === PAGE_SIZE;
+    const q =
+      opts.reset || !cursorRef.current
+        ? query(base, ...order, limit(PAGE_SIZE))
+        : query(base, ...order, startAfter(cursorRef.current), limit(PAGE_SIZE));
 
-      if (opts.reset) setPosts(nextItems);
-      else setPosts((prev) => [...prev, ...nextItems]);
+    const snap = await getDocs(q);
 
-      setCursor(nextCursor);
-      setHasMore(nextHasMore);
-    },
-    [cursor]
-  );
+    const nextItems: Post[] = snap.docs.map((d) => {
+      const data = d.data() as Record<string, unknown>;
+      return {
+        id: d.id,
+        imageUrl: String(data.imageUrl ?? ''),
+        caption: String(data.caption ?? ''),
+        createdAt: (data.createdAt as Timestamp) ?? null,
+        createdBy: String(data.createdBy ?? ''),
+      };
+    });
+
+    const nextCursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+
+    if (opts.reset) setPosts(nextItems);
+    else setPosts((prev) => [...prev, ...nextItems]);
+
+    cursorRef.current = nextCursor;
+    setHasMore(snap.docs.length === PAGE_SIZE);
+  }, []);
 
   const loadFirstPage = useCallback(async () => {
     setLoadingFirstPage(true);
     try {
-      setCursor(null);
+      cursorRef.current = null;
       setHasMore(true);
       await fetchPage({ reset: true });
     } finally {
@@ -162,7 +163,7 @@ export default function HomeScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      setCursor(null);
+      cursorRef.current = null;
       setHasMore(true);
       await fetchPage({ reset: true });
     } finally {
@@ -172,7 +173,7 @@ export default function HomeScreen() {
 
   const loadMore = useCallback(async () => {
     if (loadingFirstPage || refreshing || loadingMore) return;
-    if (!hasMore || !cursor) return;
+    if (!hasMore || !cursorRef.current) return;
 
     setLoadingMore(true);
     try {
@@ -180,11 +181,27 @@ export default function HomeScreen() {
     } finally {
       setLoadingMore(false);
     }
-  }, [cursor, fetchPage, hasMore, loadingFirstPage, loadingMore, refreshing]);
+  }, [fetchPage, hasMore, loadingFirstPage, loadingMore, refreshing]);
+
+  const handleEndReached = useCallback(() => {
+    if (loadingFirstPage) {
+      endReachedWhileLoadingRef.current = true;
+      return;
+    }
+    void loadMore();
+  }, [loadMore, loadingFirstPage]);
 
   useEffect(() => {
     void loadFirstPage();
   }, [loadFirstPage]);
+
+  // If FlashList hit end during initial load, fetch again once the first page is ready.
+  useEffect(() => {
+    if (!loadingFirstPage && endReachedWhileLoadingRef.current) {
+      endReachedWhileLoadingRef.current = false;
+      void loadMore();
+    }
+  }, [loadingFirstPage, loadMore]);
 
   return (
     <View style={styles.screen}>
@@ -194,7 +211,7 @@ export default function HomeScreen() {
         renderItem={({ item }) => <FeedItem item={item} userId={user?.uid ?? null} />}
         refreshing={refreshing}
         onRefresh={onRefresh}
-        onEndReached={loadMore}
+        onEndReached={handleEndReached}
         onEndReachedThreshold={0.4}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
