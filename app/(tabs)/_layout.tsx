@@ -19,8 +19,8 @@ export default function TabLayout() {
 
   const headerRight = () => (
     <Pressable
-      onPress={() => {
-        signOut();
+      onPress={async () => {
+        await signOut();
         router.replace('/(auth)/login');
       }}
       style={{ paddingHorizontal: 12, paddingVertical: 6 }}

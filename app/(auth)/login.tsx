@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/auth';
 export default function LoginScreen() {
   const router = useRouter();
   const { signIn } = useAuth();
+  const [error, setError] = useState<string | null>(null);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,11 +35,18 @@ export default function LoginScreen() {
 
       <Button
         title="Sign In"
-        onPress={() => {
-          signIn();
-          router.replace('/(tabs)/home');
+        onPress={async () => {
+          setError(null);
+          try {
+            await signIn(email, password);
+            router.replace('/(tabs)/home');
+          } catch (e: any) {
+            setError('Invalid email or password.');
+          }
         }}
       />
+
+      {error ? <Text style={{ color: 'red', textAlign: 'center' }}>{error}</Text> : null}
 
       <View style={styles.footerRow}>
         <Link href="/(auth)/register" style={styles.link}>

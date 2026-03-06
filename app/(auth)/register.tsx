@@ -6,7 +6,8 @@ import { useAuth } from '@/contexts/auth';
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { signIn } = useAuth();
+  const { signUp } = useAuth();
+  const [error, setError] = useState<string | null>(null);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,12 +35,19 @@ export default function RegisterScreen() {
 
       <Button
         title="Create Account"
-        onPress={() => {
-          signIn();
-          router.replace('/(tabs)/home');
+        onPress={async () => {
+          setError(null);
+          try {
+            await signUp(email, password);
+            router.replace('/(tabs)/home');
+          } catch (e: any) {
+            setError('Could not create account. Try a different email or a stronger password.');
+          }
         }}
       />
 
+      {error ? <Text style={{ color: 'red', textAlign: 'center' }}>{error}</Text> : null}
+      
       <View style={styles.footerRow}>
         <Link href="/(auth)/login" style={styles.link}>
           Log in to an existing account
