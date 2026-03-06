@@ -1,12 +1,17 @@
 import * as ImagePicker from 'expo-image-picker';
 import React, { useMemo, useState } from 'react';
 import { Alert, Button, Image, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useAuth } from '@/contexts/auth';
+import { createPost } from '@/lib/posts';
 
 export default function AddPostScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
 
   const canSubmit = useMemo(() => Boolean(imageUri) && caption.trim().length > 0, [imageUri, caption]);
+
+  const { user } = useAuth();
+  const [uploading, setUploading] = useState(false);
 
   async function pickImageFromLibrary() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -27,11 +32,39 @@ export default function AddPostScreen() {
     }
   }
 
-  function addPost() {
-    // Placeholder behavior for Part 1
-    Alert.alert('Post added', 'Placeholder: this will upload in Part 2 (Firebase).');
-    setImageUri(null);
-    setCaption('');
+  async function addPost() {
+    if (!user) {
+      Alert.alert('Not logged in', 'Please log in again.');
+      return;
+    }
+    if (!imageUri) {
+      Alert.alert('Missing image', 'Please select an image first.');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      await createPost({
+        imageUri,
+        caption: caption.trim(),
+        userId: user.uid,
+      });
+
+      Alert.alert('Success', 'Post uploaded!');
+      setImageUri(null);
+      setCaption('');
+    } catch (e: any) {
+      console.error('UPLOAD ERROR HIT');
+      console.log('UPLOAD ERROR code:', e?.code);
+      console.log('UPLOAD ERROR message:', e?.message);
+      console.log('UPLOAD ERROR serverResponse:', e?.serverResponse);
+      console.log('UPLOAD ERROR customData:', e?.customData);
+      console.log('UPLOAD ERROR full:', JSON.stringify(e, Object.getOwnPropertyNames(e)));
+
+      Alert.alert('Upload failed', e?.code ?? e?.message ?? 'Unknown error');
+    } finally {
+      setUploading(false);
+    }
   }
 
   return (
@@ -55,7 +88,11 @@ export default function AddPostScreen() {
         style={styles.input}
       />
 
-      <Button title="Add Post" onPress={addPost} disabled={!canSubmit} />
+      <Button
+        title={uploading ? 'Uploading...' : 'Add Post'}
+        onPress={addPost}
+        disabled={!canSubmit || uploading}
+      />
     </View>
   );
 }

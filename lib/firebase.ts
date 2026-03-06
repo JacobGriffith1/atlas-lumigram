@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import { getAuth, initializeAuth } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 
 
 const firebaseConfig = {
@@ -10,8 +12,11 @@ const firebaseConfig = {
   storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET!,
   messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID!,
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID!,
-  measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID!, // optional
 };
+
+console.log('FIREBASE projectId:', firebaseConfig.projectId);
+console.log('FIREBASE authDomain:', firebaseConfig.authDomain);
+console.log('FIREBASE storageBucket:', firebaseConfig.storageBucket);
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
@@ -28,3 +33,6 @@ export const auth = (() => {
     return getAuth(app);
   }
 })();
+
+export const db = getFirestore(app);
+export const storage = getStorage(app);
