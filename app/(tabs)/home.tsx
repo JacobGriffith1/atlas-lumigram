@@ -4,15 +4,20 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { FlashList } from '@shopify/flash-list';
 import {
   collection,
+  doc,
   getDocs,
   limit,
   orderBy,
   query,
+  serverTimestamp,
+  setDoc,
   startAfter,
-  Timestamp,
+  type DocumentData,
   type QueryDocumentSnapshot,
+  type Timestamp,
 } from 'firebase/firestore';
 
+import { useAuth } from '@/contexts/auth';
 import { db } from '@/lib/firebase';
 
 type Post = {
@@ -25,7 +30,27 @@ type Post = {
 
 const PAGE_SIZE = 8;
 
-function FeedItem({ item }: { item: Post }) {
+async function addFavorite(params: { userId: string; post: Post }): Promise<void> {
+  const { userId, post } = params;
+
+  // users/{uid}/favorites/{postId}
+  const favoriteRef = doc(db, 'users', userId, 'favorites', post.id);
+
+  await setDoc(
+    favoriteRef,
+    {
+      postId: post.id,
+      imageUrl: post.imageUrl,
+      caption: post.caption,
+      createdAt: post.createdAt ?? null,
+      createdBy: post.createdBy,
+      favoritedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+function FeedItem({ item, userId }: { item: Post; userId: string | null }) {
   const [showCaption, setShowCaption] = useState(false);
 
   const longPress = useMemo(
@@ -44,10 +69,18 @@ function FeedItem({ item }: { item: Post }) {
         .numberOfTaps(2)
         .maxDelay(250)
         .onEnd((_evt, success) => {
-          if (success) Alert.alert('Double tap', 'Placeholder: favorite this image');
+          if (!success) return;
+
+          if (!userId) {
+            Alert.alert('Not logged in', 'Please log in again.');
+            return;
+          }
+
+          // Fire-and-forget write to Firestore favorites
+          void addFavorite({ userId, post: item });
         })
         .runOnJS(true),
-    []
+    [item, userId]
   );
 
   const combined = useMemo(() => Gesture.Simultaneous(doubleTap, longPress), [doubleTap, longPress]);
@@ -72,29 +105,28 @@ function FeedItem({ item }: { item: Post }) {
 }
 
 export default function HomeScreen() {
+  const { user } = useAuth();
+
   const [posts, setPosts] = useState<Post[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingFirstPage, setLoadingFirstPage] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-
-  const [cursor, setCursor] = useState<QueryDocumentSnapshot | null>(null);
+  const [cursor, setCursor] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
 
   const fetchPage = useCallback(
     async (opts: { reset: boolean }) => {
       const base = collection(db, 'posts');
 
-      const constraints = [orderBy('createdAt', 'desc'), limit(PAGE_SIZE)] as const;
-
       const q =
         opts.reset || !cursor
-          ? query(base, ...constraints)
+          ? query(base, orderBy('createdAt', 'desc'), limit(PAGE_SIZE))
           : query(base, orderBy('createdAt', 'desc'), startAfter(cursor), limit(PAGE_SIZE));
 
       const snap = await getDocs(q);
 
       const nextItems: Post[] = snap.docs.map((d) => {
-        const data = d.data() as any;
+        const data = d.data() as Record<string, unknown>;
         return {
           id: d.id,
           imageUrl: String(data.imageUrl ?? ''),
@@ -107,11 +139,8 @@ export default function HomeScreen() {
       const nextCursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
       const nextHasMore = snap.docs.length === PAGE_SIZE;
 
-      if (opts.reset) {
-        setPosts(nextItems);
-      } else {
-        setPosts((prev) => [...prev, ...nextItems]);
-      }
+      if (opts.reset) setPosts(nextItems);
+      else setPosts((prev) => [...prev, ...nextItems]);
 
       setCursor(nextCursor);
       setHasMore(nextHasMore);
@@ -162,7 +191,7 @@ export default function HomeScreen() {
       <FlashList
         data={posts}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <FeedItem item={item} />}
+        renderItem={({ item }) => <FeedItem item={item} userId={user?.uid ?? null} />}
         refreshing={refreshing}
         onRefresh={onRefresh}
         onEndReached={loadMore}
@@ -175,9 +204,7 @@ export default function HomeScreen() {
             <Text style={styles.emptyText}>No posts yet.</Text>
           )
         }
-        ListFooterComponent={
-          loadingMore ? <Text style={styles.footerText}>Loading more…</Text> : <View />
-        }
+        ListFooterComponent={loadingMore ? <Text style={styles.footerText}>Loading more…</Text> : <View />}
       />
     </View>
   );
